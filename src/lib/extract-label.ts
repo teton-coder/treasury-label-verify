@@ -16,7 +16,7 @@ Read every panel visible in the image and transcribe the requested fields EXACTL
 - producer_name: the company name only, without role phrases such as "Distilled & Bottled by" or "Imported by".
 - If a field is not present, or you cannot read it with confidence, return null. Never guess or fill in from memory.
 - government_warning: the complete health warning statement from its first word to its last, verbatim. Do not substitute the standard text.
-- warning_header_bold: true if the words "GOVERNMENT WARNING" are visibly bold compared with the rest of the warning, false if they are not, null if you cannot tell.
+- warning_header_weight: look closely at the stroke thickness of the letters in "GOVERNMENT WARNING" and compare it with the letters in the sentence that follows it. Being in capital letters does NOT make text bold. Answer "heavier_than_body" only if the header strokes are clearly thicker/darker than the body text, "same_as_body" if the strokes look the same thickness, or "unclear" if the image quality does not let you tell.
 - The image may be photographed at an angle, with glare, or in poor light. Do your best and report any problems in readability_issues.`;
 
 const nullableString = { type: Type.STRING, nullable: true };
@@ -32,7 +32,7 @@ const RESPONSE_SCHEMA: Schema = {
     producer_address: { ...nullableString, description: "City and state (or address) of bottler/producer/importer" },
     country_of_origin: { ...nullableString, description: "Country of origin statement if present" },
     government_warning: { ...nullableString, description: "Verbatim health warning statement" },
-    warning_header_bold: { type: Type.BOOLEAN, nullable: true },
+    warning_header_weight: { type: Type.STRING, enum: ["heavier_than_body", "same_as_body", "unclear"] },
     image_quality: { type: Type.STRING, enum: ["good", "fair", "poor"] },
     readability_issues: { type: Type.ARRAY, items: { type: Type.STRING } },
     beverage_category: { type: Type.STRING, enum: ["beer", "wine", "spirits", "unknown"] },
@@ -46,7 +46,7 @@ const RESPONSE_SCHEMA: Schema = {
     "producer_address",
     "country_of_origin",
     "government_warning",
-    "warning_header_bold",
+    "warning_header_weight",
     "image_quality",
     "readability_issues",
     "beverage_category",
@@ -60,7 +60,7 @@ const RESPONSE_SCHEMA: Schema = {
     "producer_address",
     "country_of_origin",
     "government_warning",
-    "warning_header_bold",
+    "warning_header_weight",
     "image_quality",
     "readability_issues",
     "beverage_category",
@@ -128,11 +128,62 @@ function getClient(): GoogleGenAI {
   return client;
 }
 
+const BOLD_PROMPT = `Look only at the health warning statement on this alcohol label.
+Compare the stroke thickness of the letters in the words "GOVERNMENT WARNING" with the letters of the sentence that follows.
+Capital letters are not the same as bold: judge stroke thickness only.
+Answer "heavier_than_body" only if the header strokes are clearly thicker than the body text, "same_as_body" if they look the same thickness, or "unclear" if you cannot tell (for example blur, glare, or low resolution).`;
+
+type Weight = "heavier_than_body" | "same_as_body" | "unclear";
+
+/**
+ * Independent second opinion on the one visual judgment that is hardest for the model:
+ * whether "GOVERNMENT WARNING" is bold. Runs in parallel with extraction, so it adds no latency.
+ * Returns null on any error (the main extraction's answer is then used alone).
+ */
+async function secondOpinionOnBold(ai: GoogleGenAI, model: string, imageBase64: string, mimeType: string): Promise<Weight | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  try {
+    const res = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: BOLD_PROMPT }] }],
+      config: {
+        temperature: 0,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: { warning_header_weight: { type: Type.STRING, enum: ["heavier_than_body", "same_as_body", "unclear"] } },
+          required: ["warning_header_weight"],
+        },
+        thinkingConfig: thinkingFor(model),
+        abortSignal: controller.signal,
+      },
+    });
+    const w = JSON.parse(res.text ?? "{}").warning_header_weight;
+    return w === "heavier_than_body" || w === "same_as_body" || w === "unclear" ? w : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Combine the two independent bold judgments. Agreement is kept; any disagreement
+ * becomes "cannot tell" so the label goes to a person rather than passing on one guess.
+ */
+export function reconcileBold(first: boolean | null, second: Weight | null): boolean | null {
+  if (second === null) return first;
+  const s = second === "heavier_than_body" ? true : second === "same_as_body" ? false : null;
+  return first === s ? first : null;
+}
+
 export async function extractLabelFields(
   imageBase64: string,
   mimeType: string,
 ): Promise<ExtractedLabelFields> {
   const ai = getClient();
+  const boldCheck = secondOpinionOnBold(ai, getActiveModel(), imageBase64, mimeType);
   const primary = getActiveModel();
   const models = primary === FALLBACK_MODEL ? [primary] : [primary, FALLBACK_MODEL];
 
@@ -194,11 +245,24 @@ export async function extractLabelFields(
   if (!text) {
     throw new ExtractionError("The AI service returned an empty response (the image may have been blocked).", "AI_ERROR");
   }
+  let fields: ExtractedLabelFields;
   try {
-    return normalizeExtraction(JSON.parse(text));
+    fields = normalizeExtraction(JSON.parse(text));
   } catch {
     throw new ExtractionError("Could not understand the AI service response.", "AI_ERROR");
   }
+  if (fields.government_warning) {
+    fields.warning_header_bold = reconcileBold(fields.warning_header_bold, await boldCheck);
+  }
+  return fields;
+}
+
+/** Map the model's stroke-weight comparison to bold true/false/unknown. */
+function headerBold(raw: Record<string, unknown>): boolean | null {
+  if (raw.warning_header_weight === "heavier_than_body") return true;
+  if (raw.warning_header_weight === "same_as_body") return false;
+  if (typeof raw.warning_header_bold === "boolean") return raw.warning_header_bold;
+  return null;
 }
 
 /** Defensive normalization: never trust model output shape. */
@@ -220,7 +284,7 @@ export function normalizeExtraction(raw: Record<string, unknown>): ExtractedLabe
     producer_address: str(raw.producer_address),
     country_of_origin: str(raw.country_of_origin),
     government_warning: str(raw.government_warning),
-    warning_header_bold: typeof raw.warning_header_bold === "boolean" ? raw.warning_header_bold : null,
+    warning_header_bold: headerBold(raw),
     image_quality: oneOf(raw.image_quality, ["good", "fair", "poor"] as const, "fair"),
     readability_issues: Array.isArray(raw.readability_issues)
       ? raw.readability_issues.filter((x): x is string => typeof x === "string" && x.trim() !== "")

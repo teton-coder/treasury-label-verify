@@ -11,7 +11,7 @@ import {
   checkWarningText,
   verifyLabel,
 } from "../src/lib/verify-label";
-import { isModelUnavailable, isTransientOverload, normalizeExtraction, thinkingFor } from "../src/lib/extract-label";
+import { isModelUnavailable, isTransientOverload, normalizeExtraction, reconcileBold, thinkingFor } from "../src/lib/extract-label";
 import { parseApplicationCsv } from "../src/lib/csv";
 import { GOVERNMENT_WARNING_TEXT } from "../src/lib/constants";
 import type { ExtractedLabelFields } from "../src/lib/types";
@@ -183,6 +183,25 @@ describe("model selection", () => {
     expect(thinkingFor("gemini-3.6-flash")).toEqual({ thinkingLevel: "MINIMAL" });
     expect(thinkingFor("gemini-3.8-flash")).toEqual({ thinkingLevel: "LOW" });
     expect(thinkingFor("gemini-2.5-flash")).toEqual({ thinkingBudget: 0 });
+  });
+});
+
+describe("bold second opinion", () => {
+  it("keeps agreement and turns disagreement into 'cannot tell'", () => {
+    expect(reconcileBold(true, "heavier_than_body")).toBe(true);
+    expect(reconcileBold(false, "same_as_body")).toBe(false);
+    expect(reconcileBold(true, "same_as_body")).toBeNull();
+    expect(reconcileBold(false, "heavier_than_body")).toBeNull();
+    expect(reconcileBold(true, "unclear")).toBeNull();
+    expect(reconcileBold(true, null)).toBe(true);
+  });
+});
+
+describe("bold header mapping", () => {
+  it("maps stroke-weight comparison to bold true/false/unknown", () => {
+    expect(normalizeExtraction({ warning_header_weight: "heavier_than_body" }).warning_header_bold).toBe(true);
+    expect(normalizeExtraction({ warning_header_weight: "same_as_body" }).warning_header_bold).toBe(false);
+    expect(normalizeExtraction({ warning_header_weight: "unclear" }).warning_header_bold).toBeNull();
   });
 });
 

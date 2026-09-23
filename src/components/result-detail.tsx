@@ -52,7 +52,9 @@ export function ResultDetail({ result, imageUrl }: { result: VerificationResult;
           <div>
             <p className="text-2xl font-bold">{s.label}</p>
             <p className="mt-1 text-lg">{result.summary}</p>
-            <p className="mt-1 text-sm opacity-70">Checked in {(result.processing_time_ms / 1000).toFixed(1)} seconds</p>
+            <p className="mt-1 text-sm opacity-70">
+              Checked in {(result.processing_time_ms / 1000).toFixed(1)} seconds · read by {result.model}
+            </p>
           </div>
         </div>
 

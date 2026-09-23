@@ -235,7 +235,7 @@ export function LabelVerifier() {
 
   const exportCsv = () => {
     const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
-    const header = ["filename", "result", "summary", "problems", "needs_review", "seconds"];
+    const header = ["filename", "result", "summary", "problems", "needs_review", "seconds", "model"];
     const rows = items.map((i) => {
       const r = i.result;
       const list = (s: string) => r?.fields.filter((f) => f.status === s).map((f) => `${f.label}: ${f.message}`).join(" | ") ?? "";
@@ -246,6 +246,7 @@ export function LabelVerifier() {
         list("fail"),
         list("review"),
         r ? (r.processing_time_ms / 1000).toFixed(1) : "",
+        r?.model ?? "",
       ].map((v) => esc(String(v)));
     });
     const blob = new Blob([[header.join(","), ...rows.map((r) => r.join(","))].join("\n")], { type: "text/csv" });
