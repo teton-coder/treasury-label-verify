@@ -1,0 +1,70 @@
+[
+  {
+    "file": "01-old-tom-bourbon-compliant.png",
+    "note": "Fully compliant. Application brand is title case; label is all caps (should still pass).",
+    "application": {
+      "brand_name": "Old Tom Distillery",
+      "class_type": "Kentucky Straight Bourbon Whiskey",
+      "alcohol_content": "45% Alc./Vol. (90 Proof)",
+      "net_contents": "750 mL",
+      "producer_name": "Old Tom Distillery Co."
+    }
+  },
+  {
+    "file": "02-stones-throw-titlecase-warning.png",
+    "note": "Warning header in title case ('Government Warning:'). Should fail.",
+    "application": {
+      "brand_name": "Stone's Throw",
+      "class_type": "Straight Rye Whiskey",
+      "alcohol_content": "50%",
+      "net_contents": "750 mL",
+      "producer_name": "Stone's Throw Spirits"
+    }
+  },
+  {
+    "file": "03-harbor-light-abv-mismatch.png",
+    "note": "Label says 40% but application says 43%. Should fail on alcohol content.",
+    "application": {
+      "brand_name": "Harbor Light",
+      "class_type": "London Dry Gin",
+      "alcohol_content": "43%",
+      "net_contents": "1 L",
+      "producer_name": "Harbor Light Distilling"
+    }
+  },
+  {
+    "file": "04-copper-kettle-altered-warning.png",
+    "note": "Warning wording altered ('may cause health problems' changed). Should fail with a word diff.",
+    "application": {
+      "brand_name": "Copper Kettle",
+      "class_type": "India Pale Ale",
+      "alcohol_content": "6.8%",
+      "net_contents": "355 mL",
+      "producer_name": "Copper Kettle Brewing"
+    }
+  },
+  {
+    "file": "05-chateau-verre-import.png",
+    "note": "Imported wine with country of origin; application net contents in a different format. Should pass.",
+    "application": {
+      "brand_name": "Chateau Verre",
+      "class_type": "Red Bordeaux Wine",
+      "alcohol_content": "13.5%",
+      "net_contents": "750 mL",
+      "producer_name": "Verre Imports LLC",
+      "country_of_origin": "France"
+    }
+  },
+  {
+    "file": "06-desert-bloom-photo-angle.jpg",
+    "note": "Photographed at an angle with glare and blur, warning header not bold. Tests image handling.",
+    "application": {
+      "brand_name": "Desert Bloom",
+      "class_type": "Tequila Blanco",
+      "alcohol_content": "40%",
+      "net_contents": "750 mL",
+      "producer_name": "Desert Bloom Spirits",
+      "country_of_origin": "Mexico"
+    }
+  }
+]
