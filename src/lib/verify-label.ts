@@ -191,16 +191,27 @@ export function checkProducer(ex: ExtractedLabelFields, onApp?: string): FieldVe
     return result(F, L, "review", shown, "A name was found but no city/state. Please confirm the address is on the label.", onApp);
   }
   if (onApp?.trim() && ex.producer_name) {
-    const onLabel = stripRolePhrase(ex.producer_name);
-    const appKey = looseKey(stripRolePhrase(onApp));
-    // "Distilled & Bottled by Old Tom Distillery Co." contains "Old Tom Distillery Co."
-    if (appKey && looseKey(onLabel).includes(appKey)) {
+    // "Distilled & Bottled by Old Tom Distillery Co., Bardstown, KY" -> "Old Tom Distillery Co."
+    const onLabel = stripRolePhrase(ex.producer_name).split(",")[0].trim();
+    const r = checkTextField(F, L, onLabel, stripRolePhrase(onApp), "fail");
+    if (r.status !== "pass" && isSubstantialNameMatch(onLabel, onApp)) {
       return result(F, L, "pass", shown, "Matches the application.", onApp.trim());
     }
-    const r = checkTextField(F, L, onLabel, onApp, "fail");
-    return { ...r, extracted: shown };
+    return { ...r, extracted: shown, expected: onApp.trim() };
   }
   return result(F, L, "pass", shown, "Name and address are present.");
+}
+
+/**
+ * Whole-word match where the application name is a substantial part of the label name
+ * ("Old Tom Distillery" vs "Old Tom Distillery Co."). Requires at least two words and
+ * 60% of the label's words, so "Co." or "Sky" never match "Big Sky Distilling".
+ */
+export function isSubstantialNameMatch(labelName: string, appName: string): boolean {
+  const a = looseKey(stripRolePhrase(appName)).split(" ").filter(Boolean);
+  const l = looseKey(labelName).split(" ").filter(Boolean);
+  if (a.length < 2 || l.length === 0 || a.length / l.length < 0.6) return false;
+  return ` ${l.join(" ")} `.includes(` ${a.join(" ")} `);
 }
 
 /** Remove leading role statements like "Distilled & Bottled by" / "Imported by". */

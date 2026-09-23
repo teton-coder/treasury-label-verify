@@ -96,7 +96,8 @@ export function parseNetContentsMl(s: string): number | null {
   let found = false;
   let system: "metric" | "us" | null = null;
   for (const m of text.matchAll(re)) {
-    const qty = parseFloat(m[1].replace(",", "."));
+    // "1,000 mL" is a thousands separator; "1,5 L" is a decimal comma.
+    const qty = parseFloat(/,\d{3}$/.test(m[1]) ? m[1].replace(",", "") : m[1].replace(",", "."));
     const unit = m[2].replace(/\s+/g, " ").trim().replace(/\.$/, "");
     const hit = UNIT_TO_ML.find(([u]) => u.test(unit));
     if (!hit) continue;

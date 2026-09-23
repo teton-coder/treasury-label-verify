@@ -10,7 +10,7 @@ import {
   checkWarningText,
   verifyLabel,
 } from "../src/lib/verify-label";
-import { normalizeExtraction } from "../src/lib/extract-label";
+import { isModelUnavailable, normalizeExtraction, thinkingFor } from "../src/lib/extract-label";
 import { parseApplicationCsv } from "../src/lib/csv";
 import { GOVERNMENT_WARNING_TEXT } from "../src/lib/constants";
 import type { ExtractedLabelFields } from "../src/lib/types";
@@ -50,6 +50,8 @@ describe("matching", () => {
     expect(parseNetContentsMl("12 FL. OZ.")).toBeCloseTo(354.9, 0);
     expect(parseNetContentsMl("1 PINT 9.4 FL OZ")).toBeCloseTo(751.2, 0);
     expect(parseNetContentsMl("12 FL OZ (355 mL)")).toBeCloseTo(354.9, 0);
+    expect(parseNetContentsMl("1,000 mL")).toBe(1000);
+    expect(parseNetContentsMl("1,5 L")).toBe(1500);
     expect(parseNetContentsMl("seven fifty")).toBeNull();
   });
   it("parses European decimal commas in ABV", () => {
@@ -123,6 +125,13 @@ describe("producer", () => {
     expect(checkProducer({ ...good, producer_name: "Distilled & Bottled by Old Tom Distillery Co." }, "Old Tom Distillery Co.").status).toBe("pass");
     expect(checkProducer({ ...good, producer_name: "Imported by Verre Imports LLC" }, "Verre Imports LLC").status).toBe("pass");
     expect(checkProducer({ ...good, producer_name: "Bottled by River Bend Co." }, "Old Tom Distillery Co.").status).toBe("fail");
+    expect(checkProducer({ ...good, producer_name: "Imported by Verre Imports LLC, New York, NY" }, "Verre Imports LLC").status).toBe("pass");
+    expect(checkProducer({ ...good, producer_name: "Old Tom Distillery Co." }, "Old Tom Distillery").status).toBe("pass");
+  });
+  it("does not pass short or partial producer names", () => {
+    for (const [label, app] of [["Acme Spirits", "A"], ["Acme Spirits Co.", "Co."], ["Big Sky Distilling", "Sky"], ["Coca Cola", "Cola"], ["Stone's Throw Spirits", "Stone"]]) {
+      expect(checkProducer({ ...good, producer_name: label }, app).status, `${label} vs ${app}`).not.toBe("pass");
+    }
   });
 });
 
@@ -148,6 +157,19 @@ describe("verifyLabel", () => {
   });
   it("needs review for poor images", () => {
     expect(verifyLabel({ ...good, image_quality: "poor", readability_issues: ["glare"] }).overall_status).toBe("review");
+  });
+});
+
+describe("model selection", () => {
+  it("falls back only on genuine model-not-found errors", () => {
+    expect(isModelUnavailable('{"error":{"code":404,"status":"NOT_FOUND"}}')).toBe(true);
+    expect(isModelUnavailable("Unsupported MIME type: image/gif is not supported")).toBe(false);
+    expect(isModelUnavailable("Thinking level is not available for this request")).toBe(false);
+  });
+  it("uses a thinking setting each model supports", () => {
+    expect(thinkingFor("gemini-3.6-flash")).toEqual({ thinkingLevel: "MINIMAL" });
+    expect(thinkingFor("gemini-3.8-flash")).toEqual({ thinkingLevel: "LOW" });
+    expect(thinkingFor("gemini-2.5-flash")).toEqual({ thinkingBudget: 0 });
   });
 });
 

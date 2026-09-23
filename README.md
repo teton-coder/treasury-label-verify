@@ -48,7 +48,7 @@ results UI ◄──────────────────────
 | App framework | Next.js 16 (App Router), React 19, TypeScript | One deployable unit for UI and API; types shared end to end |
 | Styling | Tailwind CSS 4, lucide-react icons | Fast to build an accessible, consistent UI |
 | AI | Google Gemini 3.6 Flash via `@google/genai` (automatic fallback to 3.5 Flash-Lite) | Current stable, fast, inexpensive multimodal model with native JSON-schema output; strong on printed text and imperfect photos |
-| Tests | Vitest (26 tests on matching, rules, CSV, and output normalization) | The rules are the product; they must be tested |
+| Tests | Vitest (29 tests on matching, rules, CSV, and output normalization) | The rules are the product; they must be tested |
 | Hosting | Vercel | Zero-config Next.js hosting for a prototype |
 | Sample data | `scripts/make-samples.mjs` (sharp and SVG) | Reproducible test labels, each exercising a specific rule |
 

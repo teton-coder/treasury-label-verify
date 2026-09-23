@@ -182,7 +182,7 @@ export function LabelVerifier() {
     const missing = items.filter((i) => !csvMap.has(i.file.name.toLowerCase())).length;
     const msgs: string[] = [];
     if (orphan.length) msgs.push(`${orphan.length} CSV row(s) have no matching image: ${orphan.slice(0, 5).join(", ")}${orphan.length > 5 ? ", …" : ""}`);
-    if (missing) msgs.push(`${missing} image(s) have no row in the CSV. They will be checked for required items only and marked for review.`);
+    if (missing) msgs.push(`${missing} image(s) have no row in the CSV. They are checked for required items only and marked for review.`);
     return msgs;
   }, [mode, csvMap, items]);
   const allNotices = [...notices, ...csvNotices];

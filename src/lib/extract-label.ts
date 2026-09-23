@@ -96,15 +96,17 @@ export function thinkingFor(model: string): ThinkingConfig {
   return { thinkingLevel: ThinkingLevel.MINIMAL };
 }
 
-/** Model is unknown or not enabled for this key: worth retrying on the fallback model. */
-function isModelUnavailable(msg: string): boolean {
-  return /\b404\b|NOT_FOUND|no longer available|not found for API version|is not supported|not available/i.test(msg);
+/** Model is unknown or not enabled for this key (HTTP 404): worth retrying on the fallback model. */
+export function isModelUnavailable(msg: string): boolean {
+  return /\b404\b|NOT_FOUND/.test(msg);
 }
 
-let resolvedModel: string | null = null;
-/** Model actually serving requests (after any fallback). */
+/** After a fallback, stay on the fallback model for a while, then try the primary again. */
+const FALLBACK_TTL_MS = 10 * 60 * 1000;
+let fallbackUntil = 0;
+/** Model currently serving requests. */
 export function getActiveModel(): string {
-  return resolvedModel ?? getModelName();
+  return Date.now() < fallbackUntil ? FALLBACK_MODEL : getModelName();
 }
 
 let client: GoogleGenAI | null = null;
@@ -151,7 +153,7 @@ export async function extractLabelFields(
         },
       });
       text = response.text;
-      resolvedModel = model;
+      if (i > 0) fallbackUntil = Date.now() + FALLBACK_TTL_MS;
       break;
     } catch (err) {
       if (controller.signal.aborted) {
