@@ -25,6 +25,7 @@ const APP_FIELDS: Array<{ key: keyof ApplicationData; label: string; placeholder
   { key: "alcohol_content", label: "Alcohol content", placeholder: "45% Alc./Vol. (90 Proof)" },
   { key: "net_contents", label: "Net contents", placeholder: "750 mL" },
   { key: "producer_name", label: "Bottler / producer", placeholder: "Old Tom Distillery Co." },
+  { key: "producer_address", label: "Bottler / producer address", placeholder: "Bardstown, Kentucky" },
   { key: "country_of_origin", label: "Country of origin (imports only)", placeholder: "Leave blank if domestic" },
 ];
 

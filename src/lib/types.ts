@@ -54,6 +54,7 @@ export interface ApplicationData {
   alcohol_content?: string;
   net_contents?: string;
   producer_name?: string;
+  producer_address?: string;
   country_of_origin?: string;
   is_import?: boolean;
 }

@@ -64,37 +64,37 @@ const samples = [
     file: "01-old-tom-bourbon-compliant.png",
     note: "Fully compliant. Application brand is title case; label is all caps (should still pass).",
     svg: { bg: "#f4ead5", fg: "#3b2410", brand: "OLD TOM DISTILLERY", tagline: "Est. 1887 · Bardstown", classType: "Kentucky Straight Bourbon Whiskey", abv: "45% Alc./Vol. (90 Proof)", net: "750 mL", producer: "Distilled & Bottled by Old Tom Distillery Co., Bardstown, KY", mark: "OT", brandSize: 58 },
-    application: { brand_name: "Old Tom Distillery", class_type: "Kentucky Straight Bourbon Whiskey", alcohol_content: "45% Alc./Vol. (90 Proof)", net_contents: "750 mL", producer_name: "Old Tom Distillery Co." },
+    application: { brand_name: "Old Tom Distillery", class_type: "Kentucky Straight Bourbon Whiskey", alcohol_content: "45% Alc./Vol. (90 Proof)", net_contents: "750 mL", producer_name: "Old Tom Distillery Co.", producer_address: "Bardstown, KY" },
   },
   {
     file: "02-stones-throw-titlecase-warning.png",
     note: "Warning header in title case ('Government Warning:'). Should fail.",
     svg: { bg: "#e9f0f5", fg: "#10283b", brand: "STONE'S THROW", tagline: "Small Batch", classType: "Straight Rye Whiskey", abv: "50% Alc./Vol. (100 Proof)", net: "750 mL", producer: "Bottled by Stone's Throw Spirits, Denver, CO", header: "Government Warning:", mark: "ST" },
-    application: { brand_name: "Stone's Throw", class_type: "Straight Rye Whiskey", alcohol_content: "50%", net_contents: "750 mL", producer_name: "Stone's Throw Spirits" },
+    application: { brand_name: "Stone's Throw", class_type: "Straight Rye Whiskey", alcohol_content: "50%", net_contents: "750 mL", producer_name: "Stone's Throw Spirits", producer_address: "Denver, CO" },
   },
   {
     file: "03-harbor-light-abv-mismatch.png",
     note: "Label says 40% but application says 43%. Should fail on alcohol content.",
     svg: { bg: "#fdfaf3", fg: "#1d3557", brand: "HARBOR LIGHT", tagline: "Coastal Dry Gin", classType: "London Dry Gin", abv: "40% Alc./Vol. (80 Proof)", net: "1 L", producer: "Harbor Light Distilling, Portland, ME", mark: "⚓" },
-    application: { brand_name: "Harbor Light", class_type: "London Dry Gin", alcohol_content: "43%", net_contents: "1 L", producer_name: "Harbor Light Distilling" },
+    application: { brand_name: "Harbor Light", class_type: "London Dry Gin", alcohol_content: "43%", net_contents: "1 L", producer_name: "Harbor Light Distilling", producer_address: "Portland, ME" },
   },
   {
     file: "04-copper-kettle-altered-warning.png",
     note: "Warning wording altered ('may cause health problems' changed). Should fail with a word diff.",
     svg: { bg: "#f7efe6", fg: "#5a2d0c", brand: "COPPER KETTLE", tagline: "Hazy IPA", classType: "India Pale Ale", abv: "6.8% Alc./Vol.", net: "12 FL. OZ.", producer: "Brewed & Canned by Copper Kettle Brewing, Bend, OR", w2: "(2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may be harmful.", mark: "CK" },
-    application: { brand_name: "Copper Kettle", class_type: "India Pale Ale", alcohol_content: "6.8%", net_contents: "355 mL", producer_name: "Copper Kettle Brewing" },
+    application: { brand_name: "Copper Kettle", class_type: "India Pale Ale", alcohol_content: "6.8%", net_contents: "355 mL", producer_name: "Copper Kettle Brewing", producer_address: "Bend, OR" },
   },
   {
     file: "05-chateau-verre-import.png",
     note: "Imported wine with country of origin; application net contents in a different format. Should pass.",
     svg: { bg: "#f3f0f7", fg: "#3a1d4d", brand: "CHÂTEAU VERRE", tagline: "Bordeaux Supérieur 2021", classType: "Red Bordeaux Wine", abv: "13.5% Alc./Vol.", net: "750 ML", producer: "Imported by Verre Imports LLC, New York, NY", country: "Product of France", mark: "CV", brandSize: 64 },
-    application: { brand_name: "Chateau Verre", class_type: "Red Bordeaux Wine", alcohol_content: "13.5%", net_contents: "750 mL", producer_name: "Verre Imports LLC", country_of_origin: "France" },
+    application: { brand_name: "Chateau Verre", class_type: "Red Bordeaux Wine", alcohol_content: "13.5%", net_contents: "750 mL", producer_name: "Verre Imports LLC", producer_address: "New York, NY", country_of_origin: "France" },
   },
   {
     file: "06-desert-bloom-photo-angle.jpg",
     note: "Photographed at an angle with glare and blur, warning header not bold. Tests image handling.",
     svg: { bg: "#fff4e6", fg: "#6b2d00", brand: "DESERT BLOOM", tagline: "Blanco", classType: "Tequila Blanco", abv: "40% Alc./Vol. (80 Proof)", net: "750 mL", producer: "Imported by Desert Bloom Spirits, Phoenix, AZ", country: "Product of Mexico", boldHeader: false, mark: "DB" },
-    application: { brand_name: "Desert Bloom", class_type: "Tequila Blanco", alcohol_content: "40%", net_contents: "750 mL", producer_name: "Desert Bloom Spirits", country_of_origin: "Mexico" },
+    application: { brand_name: "Desert Bloom", class_type: "Tequila Blanco", alcohol_content: "40%", net_contents: "750 mL", producer_name: "Desert Bloom Spirits", producer_address: "Phoenix, AZ", country_of_origin: "Mexico" },
     photo: true,
   },
 ];
@@ -120,7 +120,7 @@ writeFileSync(
   JSON.stringify(samples.map(({ file, note, application }) => ({ file, note, application })), null, 2),
 );
 
-const cols = ["filename", "brand_name", "class_type", "alcohol_content", "net_contents", "producer_name", "country_of_origin"];
+const cols = ["filename", "brand_name", "class_type", "alcohol_content", "net_contents", "producer_name", "producer_address", "country_of_origin"];
 const q = (v) => (v && /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v ?? "");
 writeFileSync(
   `${OUT}/applications.csv`,

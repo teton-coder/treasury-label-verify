@@ -74,7 +74,7 @@ function fail(status: number, code: VerifyResponse["code"], error: string) {
   return NextResponse.json<VerifyResponse>({ success: false, code, error }, { status });
 }
 
-const APP_KEYS = ["brand_name", "class_type", "alcohol_content", "net_contents", "producer_name", "country_of_origin"] as const;
+const APP_KEYS = ["brand_name", "class_type", "alcohol_content", "net_contents", "producer_name", "producer_address", "country_of_origin"] as const;
 
 function parseApplicationData(raw: FormDataEntryValue | null): ApplicationData | "invalid" {
   if (typeof raw !== "string" || raw.trim() === "") return {};

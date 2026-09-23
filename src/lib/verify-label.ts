@@ -29,7 +29,7 @@ export function verifyLabel(
     checkClassType(extracted.class_type, app.class_type),
     checkAlcohol(extracted, app.alcohol_content),
     checkNetContents(extracted.net_contents, app.net_contents),
-    checkProducer(extracted, app.producer_name),
+    checkProducer(extracted, app.producer_name, app.producer_address),
     checkCountry(extracted.country_of_origin, app),
     checkWarningText(extracted.government_warning),
     checkWarningBold(extracted),
@@ -199,7 +199,7 @@ export function checkNetContents(onLabel: string | null, onApp?: string): FieldV
   return result(F, L, "fail", onLabel, "Does not match the application.", expected);
 }
 
-export function checkProducer(ex: ExtractedLabelFields, onApp?: string): FieldVerification {
+export function checkProducer(ex: ExtractedLabelFields, onApp?: string, appAddress?: string): FieldVerification {
   const F = "producer";
   const L = "Bottler / producer";
   const shown = [ex.producer_name, ex.producer_address].filter(Boolean).join(", ") || null;
@@ -209,16 +209,33 @@ export function checkProducer(ex: ExtractedLabelFields, onApp?: string): FieldVe
   if (!ex.producer_address) {
     return result(F, L, "review", shown, "A name was found but no city/state. Please confirm the address is on the label.", onApp);
   }
+  let nameCheck: FieldVerification;
   if (onApp?.trim() && ex.producer_name) {
     // "Distilled & Bottled by Old Tom Distillery Co., Bardstown, KY" -> "Old Tom Distillery Co."
     const onLabel = stripRolePhrase(ex.producer_name).split(",")[0].trim();
     const r = checkTextField(F, L, onLabel, stripRolePhrase(onApp), "fail");
-    if (r.status !== "pass" && isSubstantialNameMatch(onLabel, onApp)) {
-      return result(F, L, "pass", shown, "Matches the application.", onApp.trim());
-    }
-    return { ...r, extracted: shown, expected: onApp.trim() };
+    nameCheck = r.status !== "pass" && isSubstantialNameMatch(onLabel, onApp)
+      ? result(F, L, "pass", shown, "Matches the application.", onApp.trim())
+      : { ...r, extracted: shown, expected: onApp.trim() };
+  } else {
+    nameCheck = result(F, L, "pass", shown, "Name and address are present.");
   }
-  return result(F, L, "pass", shown, "Name and address are present.");
+  const expectedAddress = appAddress?.trim();
+  if (!expectedAddress) return nameCheck;
+
+  const addressMatch = compareValues(ex.producer_address, expectedAddress);
+  const addressStatus: CheckStatus = addressMatch === "different" ? "fail" : addressMatch === "similar" ? "review" : "pass";
+  const status: CheckStatus = nameCheck.status === "fail" || addressStatus === "fail"
+    ? "fail"
+    : nameCheck.status === "review" || addressStatus === "review"
+      ? "review"
+      : "pass";
+  const addressMessage = addressStatus === "pass"
+    ? "Producer address matches the application."
+    : addressStatus === "review"
+      ? "Producer address almost matches the application. Please check."
+      : "Producer address does not match the application.";
+  return result(F, L, status, shown, `${nameCheck.message} ${addressMessage}`, [onApp?.trim(), expectedAddress].filter(Boolean).join(", "));
 }
 
 /**
@@ -257,7 +274,7 @@ export function checkCountry(onLabel: string | null, app: ApplicationData): Fiel
   }
   if (app.country_of_origin?.trim()) {
     // Labels usually say "Product of Scotland"; the application just says "Scotland".
-    if (looseKey(onLabel).includes(looseKey(app.country_of_origin))) {
+    if ((` ${looseKey(onLabel)} `).includes(` ${looseKey(app.country_of_origin)} `)) {
       return result(F, L, "pass", onLabel, "Matches the application.", app.country_of_origin);
     }
     return checkTextField(F, L, onLabel, app.country_of_origin, "fail");

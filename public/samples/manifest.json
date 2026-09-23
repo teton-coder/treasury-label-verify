@@ -7,7 +7,8 @@
       "class_type": "Kentucky Straight Bourbon Whiskey",
       "alcohol_content": "45% Alc./Vol. (90 Proof)",
       "net_contents": "750 mL",
-      "producer_name": "Old Tom Distillery Co."
+      "producer_name": "Old Tom Distillery Co.",
+      "producer_address": "Bardstown, KY"
     }
   },
   {
@@ -18,7 +19,8 @@
       "class_type": "Straight Rye Whiskey",
       "alcohol_content": "50%",
       "net_contents": "750 mL",
-      "producer_name": "Stone's Throw Spirits"
+      "producer_name": "Stone's Throw Spirits",
+      "producer_address": "Denver, CO"
     }
   },
   {
@@ -29,7 +31,8 @@
       "class_type": "London Dry Gin",
       "alcohol_content": "43%",
       "net_contents": "1 L",
-      "producer_name": "Harbor Light Distilling"
+      "producer_name": "Harbor Light Distilling",
+      "producer_address": "Portland, ME"
     }
   },
   {
@@ -40,7 +43,8 @@
       "class_type": "India Pale Ale",
       "alcohol_content": "6.8%",
       "net_contents": "355 mL",
-      "producer_name": "Copper Kettle Brewing"
+      "producer_name": "Copper Kettle Brewing",
+      "producer_address": "Bend, OR"
     }
   },
   {
@@ -52,6 +56,7 @@
       "alcohol_content": "13.5%",
       "net_contents": "750 mL",
       "producer_name": "Verre Imports LLC",
+      "producer_address": "New York, NY",
       "country_of_origin": "France"
     }
   },
@@ -64,6 +69,7 @@
       "alcohol_content": "40%",
       "net_contents": "750 mL",
       "producer_name": "Desert Bloom Spirits",
+      "producer_address": "Phoenix, AZ",
       "country_of_origin": "Mexico"
     }
   }

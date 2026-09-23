@@ -119,6 +119,10 @@ describe("field checks", () => {
     expect(checkCountry("Product of Scotland", { country_of_origin: "Scotland" }).status).toBe("pass");
     expect(checkCountry("Product of France", { country_of_origin: "Scotland" }).status).toBe("fail");
   });
+  it("matches a complete country phrase without matching letters inside another country", () => {
+    expect(checkCountry("Product of France", { country_of_origin: "France" }).status).toBe("pass");
+    expect(checkCountry("Product of Russia", { country_of_origin: "US" }).status).toBe("fail");
+  });
 });
 
 describe("class / type", () => {
@@ -141,6 +145,20 @@ describe("producer", () => {
     for (const [label, app] of [["Acme Spirits", "A"], ["Acme Spirits Co.", "Co."], ["Big Sky Distilling", "Sky"], ["Coca Cola", "Cola"], ["Stone's Throw Spirits", "Stone"]]) {
       expect(checkProducer({ ...good, producer_name: label }, app).status, `${label} vs ${app}`).not.toBe("pass");
     }
+  });
+  it("compares an optional application address as well as the producer name", () => {
+    const producer = (address?: string) =>
+      verifyLabel(good, {
+        producer_name: "Old Tom Distillery Co.",
+        ...(address === undefined ? {} : { producer_address: address }),
+      }).fields.find((field) => field.field === "producer");
+
+    expect(producer("Bardstown, Kentucky")?.status).toBe("pass");
+    expect(producer("Louisville, Kentucky")?.status).toBe("fail");
+    expect(producer("Louisville, Kentucky")?.message).toMatch(/address/i);
+    expect(producer("Louisville, Kentucky")?.expected).toContain("Louisville, Kentucky");
+    expect(producer("Bardstown, Kentucki")?.status).toBe("review");
+    expect(producer()?.status).toBe("pass");
   });
 });
 
@@ -228,5 +246,11 @@ describe("batch CSV", () => {
   });
   it("requires a filename column", () => {
     expect(parseApplicationCsv("brand\nx").warnings[0]).toMatch(/filename/);
+  });
+  it("maps producer_address and address columns to the application address", () => {
+    const explicit = parseApplicationCsv("filename,producer_address\nfirst.png,\"Bardstown, Kentucky\"\n");
+    const alias = parseApplicationCsv("filename,address\nsecond.png,\"Denver, Colorado\"\n");
+    expect(explicit.byFilename.get("first.png")?.producer_address).toBe("Bardstown, Kentucky");
+    expect(alias.byFilename.get("second.png")?.producer_address).toBe("Denver, Colorado");
   });
 });

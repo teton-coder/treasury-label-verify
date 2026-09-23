@@ -11,10 +11,10 @@ A web tool that reads an alcohol beverage label image, compares it with the COLA
 
 | Stakeholder need (from discovery notes) | How the prototype handles it |
 |---|---|
-| "Results back in about 5 seconds" (Sarah) | Single fast vision call per label (Gemini 3.6 Flash, minimal thinking, temperature 0, structured JSON output). Images are downscaled in the browser to about 2000px before upload. A hard 25 s timeout means an agent is never left hanging. The elapsed time is shown on every result. |
+| "Results back in about 5 seconds" (Sarah) | Two vision calls run in parallel per label: structured extraction and an independent check of the warning header's bold weight (Gemini 3.6 Flash, minimal thinking, temperature 0). If the primary extraction model is unavailable or overloaded, extraction may make a fallback call. Images are downscaled in the browser to about 2000px before upload. Each model call has a 25 s timeout. The elapsed time is shown on every result. |
 | "Something my 73-year-old mother could use" (Sarah) | Two big tabs: *Check one label* / *Check many labels*. Large type (18px+ body text), high-contrast colors, plain-English results ("Looks good", "Problem found", "Needs your review"), icons plus words (never color alone), keyboard and screen-reader friendly. Problems are listed first. |
 | Batch uploads of 200–300 labels (Sarah, Janet) | Up to 300 images per batch. Application data comes from a CSV keyed by filename. Labels are checked 6 at a time, and each result appears as soon as it is ready. Rate-limited requests back off and retry automatically. Filter by outcome, retry failures with one click, and download results as CSV. Images with no CSV row, and CSV rows with no image, are flagged instead of silently passing. |
-| "STONE'S THROW" vs "Stone's Throw" needs judgment (Dave) | Three-level matching: exact, **equivalent** (case, punctuation, or accents only, which passes), **similar** (small spelling differences, sent to a human), different (fails). Net contents compare by volume (12 FL OZ = 355 mL). Producer matching ignores role phrases ("Distilled & Bottled by"), and accents are ignored (CHÂTEAU = Chateau). |
+| "STONE'S THROW" vs "Stone's Throw" needs judgment (Dave) | Four-level matching: exact, **equivalent** (case, punctuation, or accents only, which passes), **similar** (small spelling differences, sent to a human), different (fails). Net contents compare by volume (12 FL OZ = 355 mL). Producer matching ignores role phrases ("Distilled & Bottled by") and compares the label address with the optional application address; near matches go to human review. Accents are ignored (CHÂTEAU = Chateau). |
 | Warning must be exact, "GOVERNMENT WARNING:" in caps and bold (Jenny) | Word-for-word comparison against 27 CFR 16.21. A title-case header fails. A changed or missing word fails and shows a highlighted word diff. The bold header is checked separately, by two independent model readings run in parallel. If they disagree, the label goes to human review rather than passing on one guess. Differences only in punctuation or capitalization within the body (for example "1." instead of "(1)") go to human review, because they may be a misread. |
 | Bad angles, glare, poor lighting (Jenny) | The model reads skewed or glare-affected photos and reports readability issues. A poor image produces "Needs your review" rather than a false pass or fail. |
 | Firewall blocks many outbound domains (Marcus) | Only one outbound dependency: `generativelanguage.googleapis.com`, called **server-side**. The browser only talks to this app. Fonts are self-hosted at build time. See *Production path* below. |
@@ -33,8 +33,9 @@ Three outcomes, not two: **pass / fail / needs review**. Anything ambiguous (nea
 ```
 Browser                               Next.js API route (/api/verify)           Gemini 3.6 Flash
 ───────                               ──────────────────────────────           ────────────────
-pick image(s) ─► downscale to ~2000px ─► validate type/size ─► extract ────────► structured JSON
-              (6 in parallel for batch)                        │
+pick image(s) ─► downscale to ~2000px ─► validate type/size ─┬─► extraction call ─────────► structured JSON
+              (6 in parallel for batch)                       └─► bold-check call ────────► independent reading
+                                                               │
                                                                ▼
                                          verify-label.ts rules (+ application data)
                                                                │
@@ -48,7 +49,7 @@ results UI ◄──────────────────────
 | App framework | Next.js 16 (App Router), React 19, TypeScript | One deployable unit for UI and API; types shared end to end |
 | Styling | Tailwind CSS 4, lucide-react icons | Fast to build an accessible, consistent UI |
 | AI | Google Gemini 3.6 Flash via `@google/genai` (automatic fallback to 3.5 Flash-Lite) | Current stable, fast, inexpensive multimodal model with native JSON-schema output; strong on printed text and imperfect photos |
-| Tests | Vitest (33 tests on matching, rules, CSV, and output normalization) | The rules are the product; they must be tested |
+| Tests | Vitest (36 tests on matching, rules, CSV, and output normalization) | The rules are the product; they must be tested |
 | Hosting | Vercel | Zero-config Next.js hosting for a prototype |
 | Sample data | `scripts/make-samples.mjs` (sharp and SVG) | Reproducible test labels, each exercising a specific rule |
 
@@ -85,11 +86,11 @@ If the key is missing, the app still loads and shows a clear banner instead of f
 
 ### API
 
-`POST /api/verify` (multipart): `file` = image, `applicationData` = optional JSON `{brand_name, class_type, alcohol_content, net_contents, producer_name, country_of_origin, is_import}`. Returns per-field results. `GET /api/verify` returns `{configured, model}` as a health check.
+`POST /api/verify` (multipart): `file` = image, `applicationData` = optional JSON `{brand_name, class_type, alcohol_content, net_contents, producer_name, producer_address, country_of_origin, is_import}`. The producer address is optional; when provided, the result compares both producer name and address. Returns per-field results. `GET /api/verify` returns `{configured, model}` as a health check.
 
 ## Sample labels
 
-`public/samples/` contains six generated labels plus `applications.csv`:
+`public/samples/` contains six generated labels plus `applications.csv`. The sample applications include producer addresses visible on each label; the CSV also accepts an `address` column as an alias for `producer_address`.
 
 | File | What it tests | Expected |
 |---|---|---|
@@ -103,9 +104,9 @@ If the key is missing, the app still loads and shows a clear banner instead of f
 ## Assumptions
 
 - **Standalone proof of concept**, per Marcus: no COLA integration, no authentication, no persistence.
-- The **application data** is what the agent is verifying against. It is entered by hand (single) or via CSV (batch) because COLA integration is out of scope. With no application data, the tool still checks that required items are present and the warning is correct.
+- The **application data** is what the agent is verifying against. It is entered by hand (single) or via CSV (batch) because COLA integration is out of scope. Producer address is optional for existing application data; when supplied, it is compared with the address read from the label. With no application data, the tool still checks that required items are present and the warning is correct.
 - **Warning text** is the statutory text in 27 CFR 16.21. Whitespace and line breaks are ignored because labels wrap text. Everything else must match.
-- **Country of origin** is only required when the application indicates an import (a country is entered). Otherwise it is informational.
+- **Country of origin** is only required when the application indicates an import (or `is_import` is true). When an application country is supplied, it must appear as a complete word or phrase in the label statement. Otherwise it is informational.
 - **Alcohol content** missing is a *fail* for spirits and *needs review* for beer and wine, since some are exempt.
 - Proof, when printed, must equal 2 × ABV.
 - Rules cover the common elements listed in the brief. The full beverage-specific rulebook (type-size minimums, sulfite and allergen declarations, same-field-of-vision rules, and so on) is out of scope for a prototype and listed below.

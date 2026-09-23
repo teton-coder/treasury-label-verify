@@ -61,6 +61,8 @@ const COLUMN_ALIASES: Record<string, keyof ApplicationData | "filename"> = {
   producer_name: "producer_name",
   producer: "producer_name",
   bottler: "producer_name",
+  producer_address: "producer_address",
+  address: "producer_address",
   country_of_origin: "country_of_origin",
   country: "country_of_origin",
   is_import: "is_import",
