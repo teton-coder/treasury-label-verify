@@ -191,10 +191,26 @@ export function checkProducer(ex: ExtractedLabelFields, onApp?: string): FieldVe
     return result(F, L, "review", shown, "A name was found but no city/state. Please confirm the address is on the label.", onApp);
   }
   if (onApp?.trim() && ex.producer_name) {
-    const r = checkTextField(F, L, ex.producer_name, onApp, "fail");
+    const onLabel = stripRolePhrase(ex.producer_name);
+    const appKey = looseKey(stripRolePhrase(onApp));
+    // "Distilled & Bottled by Old Tom Distillery Co." contains "Old Tom Distillery Co."
+    if (appKey && looseKey(onLabel).includes(appKey)) {
+      return result(F, L, "pass", shown, "Matches the application.", onApp.trim());
+    }
+    const r = checkTextField(F, L, onLabel, onApp, "fail");
     return { ...r, extracted: shown };
   }
   return result(F, L, "pass", shown, "Name and address are present.");
+}
+
+/** Remove leading role statements like "Distilled & Bottled by" / "Imported by". */
+export function stripRolePhrase(s: string): string {
+  return s
+    .replace(
+      /^\s*(?:(?:distilled|bottled|produced|imported|brewed|canned|packed|blended|made|vinted|cellared|manufactured|and|&|,)\s*)+\s*(?:by|for)\s*:?\s*/i,
+      "",
+    )
+    .trim();
 }
 
 export function checkCountry(onLabel: string | null, app: ApplicationData): FieldVerification {
@@ -239,7 +255,9 @@ export function checkWarningText(found: string | null): FieldVerification {
     const detail =
       idx === -1
         ? 'The statement does not begin with "GOVERNMENT WARNING:".'
-        : `The header reads "${text.slice(idx, idx + 19)}". It must be "GOVERNMENT WARNING:" in all capital letters.`;
+        : text.slice(idx, idx + 19) === GOVERNMENT_WARNING_HEADER
+          ? `The statement must begin with "GOVERNMENT WARNING:", but other text comes before it ("${text.slice(0, idx).trim()}").`
+          : `The header reads "${text.slice(idx, idx + 19)}". It must be "GOVERNMENT WARNING:" in all capital letters.`;
     return result(F, L, "fail", found, detail, required);
   }
 
@@ -260,7 +278,8 @@ export function checkWarningText(found: string | null): FieldVerification {
     return result(F, L, "fail", found, `Wording differs from the required statement (${parts.join("; ")}).`, required);
   }
 
-  // Same words, but punctuation or capitalization differs. Could be a misread, so a person decides.
+  // Same words, but punctuation or capitalization differs (e.g. "1." instead of "(1)").
+  // Could be a transcription misread, so a person decides.
   return result(
     F,
     L,

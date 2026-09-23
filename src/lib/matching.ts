@@ -65,10 +65,11 @@ export function diceSimilarity(a: string, b: string): number {
 
 /** Parse ABV and proof out of strings like "45% Alc./Vol. (90 Proof)". */
 export function parseAlcohol(s: string): { abv: number | null; proof: number | null } {
-  const abvMatch = s.match(/(\d{1,3}(?:\.\d+)?)\s*%/);
+  // Accept European decimal commas: "13,5% vol" is 13.5%.
+  const abvMatch = s.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/);
   const proofMatch = s.match(/(\d{1,3}(?:\.\d+)?)\s*(?:°\s*)?proof/i);
   return {
-    abv: abvMatch ? parseFloat(abvMatch[1]) : null,
+    abv: abvMatch ? parseFloat(abvMatch[1].replace(",", ".")) : null,
     proof: proofMatch ? parseFloat(proofMatch[1]) : null,
   };
 }
@@ -83,18 +84,29 @@ const UNIT_TO_ML: Array<[RegExp, number]> = [
   [/^(gal|gallons?)$/, 3785.41],
 ];
 
-/** Parse net contents to millilitres. "750 mL" -> 750, "12 FL. OZ." -> 354.9 */
+/**
+ * Parse net contents to millilitres. "750 mL" -> 750, "12 FL. OZ." -> 354.9,
+ * "1 PINT 9.4 FL OZ" -> 751.2. Only the first measurement system is used, so
+ * "12 FL OZ (355 mL)" is not double-counted.
+ */
 export function parseNetContentsMl(s: string): number | null {
-  const m = normalizeText(s)
-    .toLowerCase()
-    .match(/(\d+(?:[.,]\d+)?)\s*([a-z. ]+?)(?:\s*\(|$|\s*\/|\s*,)/);
-  if (!m) return null;
-  const qty = parseFloat(m[1].replace(",", "."));
-  const unit = m[2].trim().replace(/\.$/, "");
-  for (const [re, factor] of UNIT_TO_ML) {
-    if (re.test(unit)) return qty * factor;
+  const text = normalizeText(s).toLowerCase().split("(")[0];
+  const re = /(\d+(?:[.,]\d+)?)\s*(fl\.?\s*oz\.?|fluid ounces?|[a-z]+\.?)/g;
+  let total = 0;
+  let found = false;
+  let system: "metric" | "us" | null = null;
+  for (const m of text.matchAll(re)) {
+    const qty = parseFloat(m[1].replace(",", "."));
+    const unit = m[2].replace(/\s+/g, " ").trim().replace(/\.$/, "");
+    const hit = UNIT_TO_ML.find(([u]) => u.test(unit));
+    if (!hit) continue;
+    const sys = hit[1] === 1 || hit[1] === 10 || hit[1] === 1000 ? "metric" : "us";
+    if (system && sys !== system) break;
+    system = sys;
+    total += qty * hit[1];
+    found = true;
   }
-  return null;
+  return found ? total : null;
 }
 
 export interface WordDiffToken {

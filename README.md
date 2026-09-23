@@ -11,11 +11,11 @@ A web tool that reads an alcohol beverage label image, compares it with the COLA
 
 | Stakeholder need (from discovery notes) | How the prototype handles it |
 |---|---|
-| "Results back in about 5 seconds" (Sarah) | Single fast vision call per label (Gemini 2.5 Flash, thinking disabled, temperature 0, structured JSON output). Images are downscaled in the browser to about 2000px before upload. A hard 25 s timeout means an agent is never left hanging. The elapsed time is shown on every result. |
+| "Results back in about 5 seconds" (Sarah) | Single fast vision call per label (Gemini 3.6 Flash, minimal thinking, temperature 0, structured JSON output). Images are downscaled in the browser to about 2000px before upload. A hard 25 s timeout means an agent is never left hanging. The elapsed time is shown on every result. |
 | "Something my 73-year-old mother could use" (Sarah) | Two big tabs: *Check one label* / *Check many labels*. Large type (18px+ body text), high-contrast colors, plain-English results ("Looks good", "Problem found", "Needs your review"), icons plus words (never color alone), keyboard and screen-reader friendly. Problems are listed first. |
-| Batch uploads of 200–300 labels (Sarah, Janet) | Up to 300 images per batch. Application data comes from a CSV keyed by filename. Labels are checked 6 at a time, and each result appears as soon as it is ready. Filter by outcome, retry failures with one click, and download results as CSV. |
-| "STONE'S THROW" vs "Stone's Throw" needs judgment (Dave) | Three-level matching: exact, **equivalent** (case, punctuation, or accents only, which passes), **similar** (small spelling differences, sent to a human), different (fails). Net contents compare by volume (12 FL OZ = 355 mL). |
-| Warning must be exact, "GOVERNMENT WARNING:" in caps and bold (Jenny) | Word-for-word comparison against 27 CFR 16.21. A title-case header fails. A changed or missing word fails and shows a highlighted word diff. The bold header is checked separately. Punctuation-only differences go to human review because they may be a misread. |
+| Batch uploads of 200–300 labels (Sarah, Janet) | Up to 300 images per batch. Application data comes from a CSV keyed by filename. Labels are checked 6 at a time, and each result appears as soon as it is ready. Rate-limited requests back off and retry automatically. Filter by outcome, retry failures with one click, and download results as CSV. Images with no CSV row, and CSV rows with no image, are flagged instead of silently passing. |
+| "STONE'S THROW" vs "Stone's Throw" needs judgment (Dave) | Three-level matching: exact, **equivalent** (case, punctuation, or accents only, which passes), **similar** (small spelling differences, sent to a human), different (fails). Net contents compare by volume (12 FL OZ = 355 mL). Producer matching ignores role phrases ("Distilled & Bottled by"), and accents are ignored (CHÂTEAU = Chateau). |
+| Warning must be exact, "GOVERNMENT WARNING:" in caps and bold (Jenny) | Word-for-word comparison against 27 CFR 16.21. A title-case header fails. A changed or missing word fails and shows a highlighted word diff. The bold header is checked separately. Differences only in punctuation or capitalization within the body (for example "1." instead of "(1)") go to human review, because they may be a misread. |
 | Bad angles, glare, poor lighting (Jenny) | The model reads skewed or glare-affected photos and reports readability issues. A poor image produces "Needs your review" rather than a false pass or fail. |
 | Firewall blocks many outbound domains (Marcus) | Only one outbound dependency: `generativelanguage.googleapis.com`, called **server-side**. The browser only talks to this app. Fonts are self-hosted at build time. See *Production path* below. |
 | No sensitive data storage (Marcus) | Nothing is persisted. Images live in memory for the duration of the request. There is no database, no logging of image content, and nothing in cookies. |
@@ -31,7 +31,7 @@ A web tool that reads an alcohol beverage label image, compares it with the COLA
 Three outcomes, not two: **pass / fail / needs review**. Anything ambiguous (near-miss spellings, unreadable images, uncertain bold detection, punctuation-only warning differences) is routed to the agent instead of guessed. The tool is designed to take the routine matching off agents' plates, not to replace their judgment.
 
 ```
-Browser                               Next.js API route (/api/verify)           Gemini 2.5 Flash
+Browser                               Next.js API route (/api/verify)           Gemini 3.6 Flash
 ───────                               ──────────────────────────────           ────────────────
 pick image(s) ─► downscale to ~2000px ─► validate type/size ─► extract ────────► structured JSON
               (6 in parallel for batch)                        │
@@ -47,14 +47,14 @@ results UI ◄──────────────────────
 |---|---|---|
 | App framework | Next.js 16 (App Router), React 19, TypeScript | One deployable unit for UI and API; types shared end to end |
 | Styling | Tailwind CSS 4, lucide-react icons | Fast to build an accessible, consistent UI |
-| AI | Google Gemini 2.5 Flash via `@google/genai` | Fast, inexpensive multimodal model with native JSON-schema output; strong on printed text and imperfect photos |
-| Tests | Vitest (23 tests on matching, rules, CSV, and output normalization) | The rules are the product; they must be tested |
+| AI | Google Gemini 3.6 Flash via `@google/genai` (automatic fallback to 3.5 Flash-Lite) | Current stable, fast, inexpensive multimodal model with native JSON-schema output; strong on printed text and imperfect photos |
+| Tests | Vitest (26 tests on matching, rules, CSV, and output normalization) | The rules are the product; they must be tested |
 | Hosting | Vercel | Zero-config Next.js hosting for a prototype |
 | Sample data | `scripts/make-samples.mjs` (sharp and SVG) | Reproducible test labels, each exercising a specific rule |
 
 ## Setup and run locally
 
-Requirements: Node.js 20+ and a Gemini API key (free tier works: https://aistudio.google.com/apikey).
+Requirements: Node.js 22.12+ and a Gemini API key (https://aistudio.google.com/apikey). The free tier works for single labels. Large batches need a key with billing enabled, because free-tier rate limits are about 10 requests per minute.
 
 ```bash
 git clone https://github.com/teton-coder/treasury-label-verify.git
@@ -79,7 +79,7 @@ Environment variables:
 | Name | Required | Default | Notes |
 |---|---|---|---|
 | `GEMINI_API_KEY` | yes | – | `GOOGLE_API_KEY` is also accepted |
-| `GEMINI_MODEL` | no | `gemini-2.5-flash` | Swap models without a code change |
+| `GEMINI_MODEL` | no | `gemini-3.6-flash` | Swap models without a code change. If the model is unavailable for the key, `gemini-3.5-flash-lite` is used automatically. |
 
 If the key is missing, the app still loads and shows a clear banner instead of failing silently.
 
@@ -112,11 +112,12 @@ If the key is missing, the app still loads and shows a clear banner instead of f
 
 ## Limitations and trade-offs
 
+- **The warning check compares the model's transcription, not the pixels.** The prompt requires a verbatim copy and forbids correcting text, and the comparison itself is deterministic code. Even so, a model that silently "fixes" a misspelled warning is the main false-pass risk. A production version should add a second independent OCR pass (for example Azure Document Intelligence) and flag any disagreement for review.
 - **Bold detection is visual judgment by the model.** It is reliable on clear images but not guaranteed, so uncertainty is reported as "needs review", never as a pass.
 - **Type size is not measured.** 27 CFR 16.22 minimum type sizes depend on container size and would need calibrated image measurement.
 - **Multi-panel labels** must be in one image or checked separately. A production version would accept front and back images per application.
 - **Cloud AI dependency.** Treasury's firewall may block Google's endpoint. See *Production path*.
-- **Batch concurrency is client-driven** (6 at a time). For 300 labels this takes a few minutes and requires the tab to stay open. A production version would use a server-side job queue.
+- **Batch concurrency is client-driven** (6 at a time, with backoff on rate limits). For 300 labels this takes a few minutes and requires the tab to stay open. Throughput is bounded by the API key's quota. A production version would use a server-side job queue.
 - **No authentication or rate limiting**, since it is a public prototype. Do not upload sensitive material.
 
 ## Production path (if this moved forward)

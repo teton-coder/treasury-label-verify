@@ -63,7 +63,7 @@ const samples = [
   {
     file: "01-old-tom-bourbon-compliant.png",
     note: "Fully compliant. Application brand is title case; label is all caps (should still pass).",
-    svg: { bg: "#f4ead5", fg: "#3b2410", brand: "OLD TOM DISTILLERY", tagline: "Est. 1887 · Bardstown", classType: "Kentucky Straight Bourbon Whiskey", abv: "45% Alc./Vol. (90 Proof)", net: "750 mL", producer: "Distilled & Bottled by Old Tom Distillery Co., Bardstown, KY", mark: "OT" },
+    svg: { bg: "#f4ead5", fg: "#3b2410", brand: "OLD TOM DISTILLERY", tagline: "Est. 1887 · Bardstown", classType: "Kentucky Straight Bourbon Whiskey", abv: "45% Alc./Vol. (90 Proof)", net: "750 mL", producer: "Distilled & Bottled by Old Tom Distillery Co., Bardstown, KY", mark: "OT", brandSize: 58 },
     application: { brand_name: "Old Tom Distillery", class_type: "Kentucky Straight Bourbon Whiskey", alcohol_content: "45% Alc./Vol. (90 Proof)", net_contents: "750 mL", producer_name: "Old Tom Distillery Co." },
   },
   {

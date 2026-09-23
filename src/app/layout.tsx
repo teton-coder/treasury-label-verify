@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: "Label Check · Alcohol Label Verification Prototype",
   description: "Prototype tool that reads an alcohol beverage label image and checks it against the application and TTB labeling rules.",
   robots: { index: false },
+  icons: { icon: "/favicon.svg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

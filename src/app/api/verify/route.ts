@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ExtractionError, extractLabelFields, getApiKey, getModelName } from "@/lib/extract-label";
+import { ExtractionError, extractLabelFields, getActiveModel, getApiKey } from "@/lib/extract-label";
 import { verifyLabel } from "@/lib/verify-label";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_BYTES } from "@/lib/constants";
 import type { ApplicationData, VerifyResponse } from "@/lib/types";
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<VerifyRespons
         ...verdict,
         extracted,
         processing_time_ms: Date.now() - started,
-        model: getModelName(),
+        model: getActiveModel(),
       },
     });
   } catch (err) {
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<VerifyRespons
 
 /** GET /api/verify: health check used by the UI to show a clear banner if the AI is not configured. */
 export async function GET() {
-  return NextResponse.json({ configured: !!getApiKey(), model: getModelName() });
+  return NextResponse.json({ configured: !!getApiKey(), model: getActiveModel() });
 }
 
 function fail(status: number, code: VerifyResponse["code"], error: string) {

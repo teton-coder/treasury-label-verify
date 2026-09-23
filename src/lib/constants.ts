@@ -25,4 +25,10 @@ export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 /** Goal is ~5 s per label. Hard stop so an agent is never left waiting on a hung call. */
 export const AI_TIMEOUT_MS = 25_000;
 
-export const DEFAULT_MODEL = "gemini-2.5-flash";
+/**
+ * Current stable Flash model. Google restricts the 2.5 family to existing users,
+ * so a newly created key needs a 3.x model. If the primary model is unavailable
+ * for the key, the fallback is tried automatically.
+ */
+export const DEFAULT_MODEL = "gemini-3.6-flash";
+export const FALLBACK_MODEL = "gemini-3.5-flash-lite";

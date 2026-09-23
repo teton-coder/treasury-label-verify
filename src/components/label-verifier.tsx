@@ -109,14 +109,17 @@ export function LabelVerifier() {
       const body = new FormData();
       body.append("file", prepared, item.file.name);
       if (Object.values(appData).some(Boolean)) body.append("applicationData", JSON.stringify(appData));
-      // One automatic retry on rate limits so a burst in a large batch self-heals.
-      for (let attempt = 0; attempt < 2; attempt++) {
+      // Retry rate-limited requests with exponential backoff so a burst in a large batch self-heals.
+      const MAX_ATTEMPTS = 4;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         const res = await fetch("/api/verify", { method: "POST", body });
         const data = (await res.json().catch(() => null)) as VerifyResponse | null;
         if (data?.success && data.result) return { state: "done", result: data.result, app: appData };
         if (data?.code === "NOT_CONFIGURED") setConfigured(false);
-        if (res.status === 429 && attempt === 0) {
-          await new Promise((r) => setTimeout(r, 3000));
+        if (res.status === 429 && attempt < MAX_ATTEMPTS - 1) {
+          const retryAfter = Number(res.headers.get("retry-after")) * 1000;
+          const wait = retryAfter > 0 ? retryAfter : 4000 * 2 ** attempt + Math.random() * 1000;
+          await new Promise((r) => setTimeout(r, wait));
           continue;
         }
         return { state: "error", error: data?.error ?? `The server returned an error (${res.status}).` };
@@ -140,7 +143,28 @@ export function LabelVerifier() {
         const item = queue[next++];
         update(item.id, { state: "checking", error: undefined });
         const appData = mode === "single" ? app : csvMap?.get(item.file.name.toLowerCase()) ?? {};
-        update(item.id, await checkOne(item, appData));
+        const patch = await checkOne(item, appData);
+        // In a batch with a CSV, a label with no matching row was only checked for required items.
+        // Don't let it read as "Looks good" without saying so.
+        if (mode === "batch" && csvMap && !csvMap.has(item.file.name.toLowerCase()) && patch.result) {
+          const r = patch.result;
+          patch.result = {
+            ...r,
+            overall_status: r.overall_status === "fail" ? "fail" : "review",
+            summary: `No row for this file in ${csvName ?? "the CSV"}, so it was not compared with an application. ${r.summary}`,
+            fields: [
+              {
+                field: "application_row",
+                label: "Application data",
+                status: "review",
+                extracted: null,
+                message: `No row with filename "${item.file.name}" was found in the CSV. Only required label items were checked.`,
+              },
+              ...r.fields,
+            ],
+          };
+        }
+        update(item.id, patch);
       }
     };
     await Promise.all(Array.from({ length: Math.min(BATCH_CONCURRENCY, queue.length) }, worker));
@@ -150,7 +174,28 @@ export function LabelVerifier() {
     if (mode === "single") setOpenId(queue[0].id);
   };
 
+  // Tell the agent about CSV rows with no matching image (missing upload or filename typo), and vice versa.
+  const csvNotices = useMemo(() => {
+    if (mode !== "batch" || !csvMap || items.length === 0) return [];
+    const names = new Set(items.map((i) => i.file.name.toLowerCase()));
+    const orphan = [...csvMap.keys()].filter((k) => !names.has(k));
+    const missing = items.filter((i) => !csvMap.has(i.file.name.toLowerCase())).length;
+    const msgs: string[] = [];
+    if (orphan.length) msgs.push(`${orphan.length} CSV row(s) have no matching image: ${orphan.slice(0, 5).join(", ")}${orphan.length > 5 ? ", …" : ""}`);
+    if (missing) msgs.push(`${missing} image(s) have no row in the CSV. They will be checked for required items only and marked for review.`);
+    return msgs;
+  }, [mode, csvMap, items]);
+  const allNotices = [...notices, ...csvNotices];
+
   const loadSamples = async () => {
+    try {
+      await loadSamplesInner();
+    } catch {
+      setNotices(["The sample labels could not be loaded. Please refresh the page and try again."]);
+    }
+  };
+
+  const loadSamplesInner = async () => {
     const res = await fetch("/samples/manifest.json");
     const manifest: Array<{ file: string; application: ApplicationData }> = await res.json();
     const files = await Promise.all(
@@ -163,6 +208,7 @@ export function LabelVerifier() {
       addFiles([files[0]]);
       setApp(manifest[0].application);
     } else {
+      reset(); // avoid duplicates if clicked twice
       addFiles(files);
       const csvRes = await fetch("/samples/applications.csv");
       await loadCsv(new File([await csvRes.text()], "applications.csv"));
@@ -220,18 +266,33 @@ export function LabelVerifier() {
           <AlertTriangle className="h-6 w-6 shrink-0" aria-hidden />
           <p className="text-base">
             <strong>The AI service is not connected on this server.</strong> Labels cannot be checked until an administrator sets the
-            <code className="mx-1 rounded bg-amber-100 px-1">GEMINI_API_KEY</code> setting.
+{" "}
+            <code className="rounded bg-amber-100 px-1">GEMINI_API_KEY</code> setting.
           </p>
         </div>
       )}
 
       {/* Mode tabs */}
-      <div role="tablist" aria-label="How many labels" className="mb-6 inline-flex rounded-xl border border-slate-300 bg-white p-1">
+      <div
+        role="tablist"
+        aria-label="How many labels"
+        className="mb-6 inline-flex rounded-xl border border-slate-300 bg-white p-1"
+        onKeyDown={(e) => {
+          if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+            const next = mode === "single" ? "batch" : "single";
+            switchMode(next);
+            document.getElementById(`tab-${next}`)?.focus();
+          }
+        }}
+      >
         {(["single", "batch"] as const).map((m) => (
           <button
             key={m}
+            id={`tab-${m}`}
             role="tab"
             aria-selected={mode === m}
+            aria-controls="panel"
+            tabIndex={mode === m ? 0 : -1}
             onClick={() => switchMode(m)}
             disabled={running}
             className={`rounded-lg px-5 py-3 text-lg font-semibold ${mode === m ? "bg-[#1b2a4a] text-white" : "text-slate-700 hover:bg-slate-100"}`}
@@ -241,6 +302,7 @@ export function LabelVerifier() {
         ))}
       </div>
 
+      <div id="panel" role="tabpanel" aria-labelledby={`tab-${mode}`}>
       {/* SINGLE MODE */}
       {mode === "single" && (
         <>
@@ -444,9 +506,11 @@ export function LabelVerifier() {
         </div>
       )}
 
-      {notices.length > 0 && (
+      </div>
+
+      {allNotices.length > 0 && (
         <ul className="mt-4 space-y-1" role="alert">
-          {notices.map((n, idx) => (
+          {allNotices.map((n, idx) => (
             <li key={idx} className="rounded-lg bg-amber-50 px-4 py-2 text-base text-amber-900">
               {n}
             </li>

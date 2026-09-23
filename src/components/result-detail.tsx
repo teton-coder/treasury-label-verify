@@ -67,7 +67,7 @@ export function ResultDetail({ result, imageUrl }: { result: VerificationResult;
           className="mt-4 inline-flex items-center gap-1 text-sm text-slate-500 underline-offset-2 hover:underline"
           aria-expanded={showRaw}
         >
-          {showRaw ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          {showRaw ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
           Everything the AI read from this label
         </button>
         {showRaw && (

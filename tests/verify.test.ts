@@ -4,6 +4,7 @@ import {
   checkAlcohol,
   checkCountry,
   checkNetContents,
+  checkProducer,
   checkTextField,
   checkWarningBold,
   checkWarningText,
@@ -47,7 +48,12 @@ describe("matching", () => {
     expect(parseNetContentsMl("750 mL")).toBe(750);
     expect(parseNetContentsMl("1.75 L")).toBe(1750);
     expect(parseNetContentsMl("12 FL. OZ.")).toBeCloseTo(354.9, 0);
+    expect(parseNetContentsMl("1 PINT 9.4 FL OZ")).toBeCloseTo(751.2, 0);
+    expect(parseNetContentsMl("12 FL OZ (355 mL)")).toBeCloseTo(354.9, 0);
     expect(parseNetContentsMl("seven fifty")).toBeNull();
+  });
+  it("parses European decimal commas in ABV", () => {
+    expect(parseAlcohol("13,5% vol").abv).toBe(13.5);
   });
   it("produces a word diff", () => {
     const d = wordDiff("a b c", "a x c");
@@ -109,6 +115,22 @@ describe("field checks", () => {
     expect(checkCountry(null, { is_import: true }).status).toBe("fail");
     expect(checkCountry("Product of Scotland", { country_of_origin: "Scotland" }).status).toBe("pass");
     expect(checkCountry("Product of France", { country_of_origin: "Scotland" }).status).toBe("fail");
+  });
+});
+
+describe("producer", () => {
+  it("ignores role phrases like 'Distilled & Bottled by' and 'Imported by'", () => {
+    expect(checkProducer({ ...good, producer_name: "Distilled & Bottled by Old Tom Distillery Co." }, "Old Tom Distillery Co.").status).toBe("pass");
+    expect(checkProducer({ ...good, producer_name: "Imported by Verre Imports LLC" }, "Verre Imports LLC").status).toBe("pass");
+    expect(checkProducer({ ...good, producer_name: "Bottled by River Bend Co." }, "Old Tom Distillery Co.").status).toBe("fail");
+  });
+});
+
+describe("warning header position", () => {
+  it("explains when text precedes a correct header", () => {
+    const r = checkWarningText("Notice: " + GOVERNMENT_WARNING_TEXT);
+    expect(r.status).toBe("fail");
+    expect(r.message).toMatch(/must begin with/);
   });
 });
 
