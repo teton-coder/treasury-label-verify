@@ -26,7 +26,7 @@ export function verifyLabel(
 ): { overall_status: OverallStatus; fields: FieldVerification[]; summary: string } {
   const fields: FieldVerification[] = [
     checkTextField("brand_name", "Brand name", extracted.brand_name, app.brand_name, "fail"),
-    checkTextField("class_type", "Class / type", extracted.class_type, app.class_type, "fail"),
+    checkClassType(extracted.class_type, app.class_type),
     checkAlcohol(extracted, app.alcohol_content),
     checkNetContents(extracted.net_contents, app.net_contents),
     checkProducer(extracted, app.producer_name),
@@ -104,6 +104,25 @@ export function checkTextField(
     default:
       return result(field, label, "fail", onLabel, "Does not match the application.", expected);
   }
+}
+
+/**
+ * Class/type must match the application. If the label reading contains the application's
+ * designation plus extra words (often a tagline read together with it), a person decides.
+ */
+export function checkClassType(onLabel: string | null, onApp?: string): FieldVerification {
+  const r = checkTextField("class_type", "Class / type", onLabel, onApp, "fail");
+  if (r.status !== "fail" || !onLabel || !onApp?.trim()) return r;
+  const l = ` ${looseKey(onLabel)} `;
+  const a = looseKey(onApp);
+  if (a && l.includes(` ${a} `)) {
+    return {
+      ...r,
+      status: "review",
+      message: `The application's designation "${onApp.trim()}" appears on the label alongside other words. Please confirm the class/type is shown correctly.`,
+    };
+  }
+  return r;
 }
 
 export function checkAlcohol(ex: ExtractedLabelFields, onApp?: string): FieldVerification {

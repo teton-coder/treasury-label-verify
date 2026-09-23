@@ -12,6 +12,7 @@ const EXTRACTION_PROMPT = `You are transcribing an alcohol beverage label for a 
 Read every panel visible in the image and transcribe the requested fields EXACTLY as printed:
 - Preserve capitalization, punctuation, numbers, and units character-for-character.
 - Do NOT correct spelling, grammar, or wording. If the label is wrong, your transcription must be wrong the same way.
+- class_type: only the class/type designation (e.g. "India Pale Ale"), not taglines, fanciful names, or vintage lines printed nearby (e.g. not "Hazy IPA" or "Bordeaux Supérieur 2021").
 - producer_name: the company name only, without role phrases such as "Distilled & Bottled by" or "Imported by".
 - If a field is not present, or you cannot read it with confidence, return null. Never guess or fill in from memory.
 - government_warning: the complete health warning statement from its first word to its last, verbatim. Do not substitute the standard text.
@@ -24,7 +25,7 @@ const RESPONSE_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
     brand_name: { ...nullableString, description: "Brand name as printed" },
-    class_type: { ...nullableString, description: "Class/type designation, e.g. Kentucky Straight Bourbon Whiskey" },
+    class_type: { ...nullableString, description: "The class/type designation only, e.g. 'Kentucky Straight Bourbon Whiskey', 'India Pale Ale', 'Red Bordeaux Wine'. Exclude fanciful names, taglines, style nicknames, appellation lines and vintage years." },
     alcohol_content: { ...nullableString, description: "Alcohol statement as printed, e.g. 45% Alc./Vol. (90 Proof)" },
     net_contents: { ...nullableString, description: "Net contents as printed, e.g. 750 mL" },
     producer_name: { ...nullableString, description: "Bottler/producer/importer company name only, without phrases like 'Bottled by' or 'Imported by'" },
@@ -101,6 +102,11 @@ export function isModelUnavailable(msg: string): boolean {
   return /\b404\b|NOT_FOUND/.test(msg);
 }
 
+/** Temporary Google-side capacity errors (HTTP 500/503). Worth trying the other model or retrying. */
+export function isTransientOverload(msg: string): boolean {
+  return /\b50[03]\b|UNAVAILABLE|INTERNAL|overloaded|high demand/i.test(msg);
+}
+
 /** After a fallback, stay on the fallback model for a while, then try the primary again. */
 const FALLBACK_TTL_MS = 10 * 60 * 1000;
 let fallbackUntil = 0;
@@ -153,7 +159,6 @@ export async function extractLabelFields(
         },
       });
       text = response.text;
-      if (i > 0) fallbackUntil = Date.now() + FALLBACK_TTL_MS;
       break;
     } catch (err) {
       if (controller.signal.aborted) {
@@ -168,7 +173,16 @@ export async function extractLabelFields(
       }
       if (i < models.length - 1 && isModelUnavailable(msg)) {
         console.warn(`Model ${model} unavailable for this key; falling back to ${models[i + 1]}.`);
+        fallbackUntil = Date.now() + FALLBACK_TTL_MS;
         continue;
+      }
+      if (isTransientOverload(msg)) {
+        if (i < models.length - 1) {
+          // Google-side capacity spike: answer this request from the fallback model, keep the primary for the next one.
+          console.warn(`Model ${model} overloaded; using ${models[i + 1]} for this request.`);
+          continue;
+        }
+        throw new ExtractionError("The AI service is busy right now. Retrying usually works within a few seconds.", "RATE_LIMITED");
       }
       console.error("Gemini error:", msg);
       throw new ExtractionError("The AI service returned an error while reading this image.", "AI_ERROR");

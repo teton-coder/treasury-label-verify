@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compareValues, parseAlcohol, parseNetContentsMl, wordDiff } from "../src/lib/matching";
 import {
   checkAlcohol,
+  checkClassType,
   checkCountry,
   checkNetContents,
   checkProducer,
@@ -10,7 +11,7 @@ import {
   checkWarningText,
   verifyLabel,
 } from "../src/lib/verify-label";
-import { isModelUnavailable, normalizeExtraction, thinkingFor } from "../src/lib/extract-label";
+import { isModelUnavailable, isTransientOverload, normalizeExtraction, thinkingFor } from "../src/lib/extract-label";
 import { parseApplicationCsv } from "../src/lib/csv";
 import { GOVERNMENT_WARNING_TEXT } from "../src/lib/constants";
 import type { ExtractedLabelFields } from "../src/lib/types";
@@ -120,6 +121,14 @@ describe("field checks", () => {
   });
 });
 
+describe("class / type", () => {
+  it("sends extra surrounding words to review, not fail", () => {
+    expect(checkClassType("Hazy IPA India Pale Ale", "India Pale Ale").status).toBe("review");
+    expect(checkClassType("India Pale Ale", "India Pale Ale").status).toBe("pass");
+    expect(checkClassType("Pale Lager", "India Pale Ale").status).toBe("fail");
+  });
+});
+
 describe("producer", () => {
   it("ignores role phrases like 'Distilled & Bottled by' and 'Imported by'", () => {
     expect(checkProducer({ ...good, producer_name: "Distilled & Bottled by Old Tom Distillery Co." }, "Old Tom Distillery Co.").status).toBe("pass");
@@ -161,6 +170,10 @@ describe("verifyLabel", () => {
 });
 
 describe("model selection", () => {
+  it("recognizes Google capacity errors as transient", () => {
+    expect(isTransientOverload('{"error":{"code":503,"status":"UNAVAILABLE"}}')).toBe(true);
+    expect(isTransientOverload('{"error":{"code":400,"status":"INVALID_ARGUMENT"}}')).toBe(false);
+  });
   it("falls back only on genuine model-not-found errors", () => {
     expect(isModelUnavailable('{"error":{"code":404,"status":"NOT_FOUND"}}')).toBe(true);
     expect(isModelUnavailable("Unsupported MIME type: image/gif is not supported")).toBe(false);
