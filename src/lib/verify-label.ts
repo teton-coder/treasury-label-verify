@@ -203,39 +203,46 @@ export function checkProducer(ex: ExtractedLabelFields, onApp?: string, appAddre
   const F = "producer";
   const L = "Bottler / producer";
   const shown = [ex.producer_name, ex.producer_address].filter(Boolean).join(", ") || null;
-  if (!ex.producer_name && !ex.producer_address) {
-    return result(F, L, "fail", null, "Name and address of the bottler or producer could not be found.", onApp);
-  }
-  if (!ex.producer_address) {
-    return result(F, L, "review", shown, "A name was found but no city/state. Please confirm the address is on the label.", onApp);
-  }
-  let nameCheck: FieldVerification;
-  if (onApp?.trim() && ex.producer_name) {
+  const expected = [onApp?.trim(), appAddress?.trim()].filter(Boolean).join(", ") || undefined;
+  let nameStatus: CheckStatus;
+  let nameMessage: string;
+  if (!ex.producer_name) {
+    nameStatus = "fail";
+    nameMessage = "Producer name could not be found on the label.";
+  } else if (onApp?.trim()) {
     // "Distilled & Bottled by Old Tom Distillery Co., Bardstown, KY" -> "Old Tom Distillery Co."
     const onLabel = stripRolePhrase(ex.producer_name).split(",")[0].trim();
     const r = checkTextField(F, L, onLabel, stripRolePhrase(onApp), "fail");
-    nameCheck = r.status !== "pass" && isSubstantialNameMatch(onLabel, onApp)
-      ? result(F, L, "pass", shown, "Matches the application.", onApp.trim())
-      : { ...r, extracted: shown, expected: onApp.trim() };
+    nameStatus = r.status !== "pass" && isSubstantialNameMatch(onLabel, onApp) ? "pass" : r.status;
+    nameMessage = nameStatus === "pass" ? "Producer name matches the application." : `Producer name: ${r.message}`;
   } else {
-    nameCheck = result(F, L, "pass", shown, "Name and address are present.");
+    nameStatus = "pass";
+    nameMessage = "Producer name is present.";
   }
   const expectedAddress = appAddress?.trim();
-  if (!expectedAddress) return nameCheck;
-
-  const addressMatch = compareValues(ex.producer_address, expectedAddress);
-  const addressStatus: CheckStatus = addressMatch === "different" ? "fail" : addressMatch === "similar" ? "review" : "pass";
-  const status: CheckStatus = nameCheck.status === "fail" || addressStatus === "fail"
+  let addressStatus: CheckStatus;
+  let addressMessage: string;
+  if (!ex.producer_address) {
+    addressStatus = "review";
+    addressMessage = "Producer address could not be found on the label. Please confirm a city/state is shown.";
+  } else if (!expectedAddress) {
+    addressStatus = "pass";
+    addressMessage = "Producer address is present.";
+  } else {
+    const addressMatch = compareValues(ex.producer_address, expectedAddress);
+    addressStatus = addressMatch === "different" ? "fail" : addressMatch === "similar" ? "review" : "pass";
+    addressMessage = addressStatus === "pass"
+      ? "Producer address matches the application."
+      : addressStatus === "review"
+        ? "Producer address almost matches the application. Please check."
+        : "Producer address does not match the application.";
+  }
+  const status: CheckStatus = nameStatus === "fail" || addressStatus === "fail"
     ? "fail"
-    : nameCheck.status === "review" || addressStatus === "review"
+    : nameStatus === "review" || addressStatus === "review"
       ? "review"
       : "pass";
-  const addressMessage = addressStatus === "pass"
-    ? "Producer address matches the application."
-    : addressStatus === "review"
-      ? "Producer address almost matches the application. Please check."
-      : "Producer address does not match the application.";
-  return result(F, L, status, shown, `${nameCheck.message} ${addressMessage}`, [onApp?.trim(), expectedAddress].filter(Boolean).join(", "));
+  return result(F, L, status, shown, `${nameMessage} ${addressMessage}`, expected);
 }
 
 /**
@@ -274,7 +281,11 @@ export function checkCountry(onLabel: string | null, app: ApplicationData): Fiel
   }
   if (app.country_of_origin?.trim()) {
     // Labels usually say "Product of Scotland"; the application just says "Scotland".
-    if ((` ${looseKey(onLabel)} `).includes(` ${looseKey(app.country_of_origin)} `)) {
+    const country = looseKey(app.country_of_origin);
+    const label = ` ${looseKey(onLabel)} `;
+    const usAliases = ["us", "u s", "usa", "u s a", "united states", "united states of america"];
+    const phrases = usAliases.includes(country) ? usAliases : [country];
+    if (phrases.some((phrase) => label.includes(` ${phrase} `))) {
       return result(F, L, "pass", onLabel, "Matches the application.", app.country_of_origin);
     }
     return checkTextField(F, L, onLabel, app.country_of_origin, "fail");

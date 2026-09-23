@@ -106,7 +106,7 @@ If the key is missing, the app still loads and shows a clear banner instead of f
 - **Standalone proof of concept**, per Marcus: no COLA integration, no authentication, no persistence.
 - The **application data** is what the agent is verifying against. It is entered by hand (single) or via CSV (batch) because COLA integration is out of scope. Producer address is optional for existing application data; when supplied, it is compared with the address read from the label. With no application data, the tool still checks that required items are present and the warning is correct.
 - **Warning text** is the statutory text in 27 CFR 16.21. Whitespace and line breaks are ignored because labels wrap text. Everything else must match.
-- **Country of origin** is only required when the application indicates an import (or `is_import` is true). When an application country is supplied, it must appear as a complete word or phrase in the label statement. Otherwise it is informational.
+- **Country of origin** is only required when the application indicates an import (or `is_import` is true). When an application country is supplied, it must appear as a complete word or phrase in the label statement; `US`, `USA`, `U.S.A.`, and `United States` are recognized as equivalent complete phrases. Otherwise it is informational.
 - **Alcohol content** missing is a *fail* for spirits and *needs review* for beer and wine, since some are exempt.
 - Proof, when printed, must equal 2 × ABV.
 - Rules cover the common elements listed in the brief. The full beverage-specific rulebook (type-size minimums, sulfite and allergen declarations, same-field-of-vision rules, and so on) is out of scope for a prototype and listed below.

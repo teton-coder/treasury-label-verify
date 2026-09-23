@@ -123,6 +123,12 @@ describe("field checks", () => {
     expect(checkCountry("Product of France", { country_of_origin: "France" }).status).toBe("pass");
     expect(checkCountry("Product of Russia", { country_of_origin: "US" }).status).toBe("fail");
   });
+  it("recognizes complete United States aliases without a substring match", () => {
+    expect(checkCountry("Product of USA", { country_of_origin: "US" }).status).toBe("pass");
+    expect(checkCountry("Product of U.S.A.", { country_of_origin: "United States" }).status).toBe("pass");
+    expect(checkCountry("Product of United States of America", { country_of_origin: "USA" }).status).toBe("pass");
+    expect(checkCountry("Product of Russia", { country_of_origin: "US" }).status).toBe("fail");
+  });
 });
 
 describe("class / type", () => {
@@ -159,6 +165,25 @@ describe("producer", () => {
     expect(producer("Louisville, Kentucky")?.expected).toContain("Louisville, Kentucky");
     expect(producer("Bardstown, Kentucki")?.status).toBe("review");
     expect(producer()?.status).toBe("pass");
+  });
+  it("still checks a wrong producer name when the label address is missing", () => {
+    const r = checkProducer({ ...good, producer_name: "River Bend Co.", producer_address: null }, "Old Tom Distillery Co.", "Bardstown, Kentucky");
+    expect(r.status).toBe("fail");
+    expect(r.message).toMatch(/name/i);
+    expect(r.expected).toContain("Bardstown, Kentucky");
+    expect(checkProducer({ ...good, producer_name: "River Bend Co.", producer_address: null }, "Old Tom Distillery Co.").status).toBe("fail");
+  });
+  it("does not pass a missing producer name when the label address is present", () => {
+    const r = checkProducer({ ...good, producer_name: null }, "Old Tom Distillery Co.", "Bardstown, Kentucky");
+    expect(r.status).toBe("fail");
+    expect(r.message).toMatch(/name/i);
+    expect(r.expected).toContain("Old Tom Distillery Co.");
+    expect(r.expected).toContain("Bardstown, Kentucky");
+  });
+  it("keeps a missing label address in review and includes the expected address", () => {
+    const r = checkProducer({ ...good, producer_address: null }, "Old Tom Distillery Co.", "Bardstown, Kentucky");
+    expect(r.status).toBe("review");
+    expect(r.expected).toContain("Bardstown, Kentucky");
   });
 });
 

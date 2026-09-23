@@ -393,7 +393,7 @@ export function LabelVerifier() {
                 <h2 className="text-xl font-bold text-slate-900">2. Application data (optional)</h2>
                 <p className="mb-3 text-base text-slate-600">
                   A spreadsheet saved as CSV with one row per label. It needs a <strong>filename</strong> column plus any of: brand_name, class_type,
-                  alcohol_content, net_contents, producer_name, country_of_origin.{" "}
+                  alcohol_content, net_contents, producer_name, producer_address, country_of_origin.{" "}
                   <a href="/samples/applications.csv" className="text-blue-700 underline" download>
                     Download an example
                   </a>
